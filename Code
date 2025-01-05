@@ -1,0 +1,296 @@
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from gpiozero import Button, Buzzer
+from RPLCD.i2c import CharLCD
+import serial
+import time
+import threading
+# Pin configuration
+BUTTON
+PIN = 21 _
+BUZZER
+_
+PIN = 17 # Panic switch
+# Buzzer pin
+# Initialize LCD
+lcd = CharLCD('PCF8574'
+, 0x27)
+# Initialize GSM serial connection
+gsm
+_port = '/dev/ttyAMA0' # Adjust this if needed
+gsm
+baudrate = 9600
+_
+sim800L = serial.Serial(gsm
+_port, gsm
+_
+baudrate, timeout=1)
+# Initialize GPS serial connection
+gps
+_port = '/dev/ttyUSB0' # Adjust this if needed
+gps
+baudrate = 9600
+_
+gps
+_
+module = serial.Serial(gps
+_port, gps
+_
+baudrate, timeout=1)
+# Initialize button with pull-up resistor
+button = Button(BUTTON
+PIN, bounce
+_
+_
+time=0.5, pull
+_
+up=True)
+# Initialize buzzer on GPIO17
+buzzer = Buzzer(BUZZER
+_
+PIN)
+# Email configuration (Update with real credentials)
+SMTP
+_
+SERVER = 'smtp.gmail.com'
+SMTP
+PORT = 587
+_
+EMAIL
+_
+ADDRESS = '----------'
+EMAIL
+_
+PASSWORD = '--------'
+def get
+_gps
+_
+data():
+"""Read and parse GPS data to extract latitude and longitude.
+"""
+while True:
+line = gps
+_
+module.readline().decode('utf-8'
+, errors='ignore').strip()
+if line.startswith('$GPRMC'):
+parts = line.split('
+,
+')
+if parts[2] == 'A': # Check if the data is valid
+latitude = convert
+to
+_
+_
+decimal(parts[3], parts[4])
+longitude = convert
+to
+_
+_
+decimal(parts[5], parts[6])
+return latitude, longitude
+time.sleep(0.1)
+def convert
+to
+_
+_
+decimal(coordinate, direction):
+"""Convert GPS coordinate from NMEA format to decimal degrees.
+"""
+degrees = float(coordinate[:2])
+minutes = float(coordinate[2:]) / 60
+decimal = degrees + minutes
+if direction in ['S'
+,
+'W']:
+decimal = -decimal
+return decimal
+def send
+_
+email(subject, body, to
+_
+email):
+try:
+message = MIMEMultipart()
+message['From'] = EMAIL
+_
+ADDRESS
+message['To'] = to
+_
+email
+message['Subject'] = subject
+message.attach(MIMEText(body,
+'plain'))
+server = smtplib.SMTP(SMTP
+SERVER, SMTP
+_
+_
+PORT)
+server.starttls()
+server.login(EMAIL
+ADDRESS, EMAIL
+_
+_
+PASSWORD)
+server.sendmail(EMAIL
+ADDRESS, to
+_
+_
+email, message.as
+_
+server.quit()
+print("Email sent successfully!")
+except Exception as e:
+print(f"Failed to send email: {e}")
+def display_
+initial
+_
+messages():
+lcd.clear()
+lcd.write
+_
+string("RASPBERRY - PI 5")
+lcd.cursor
+_pos = (1, 0)
+lcd.write
+_
+string(" BASED WOMEN")
+time.sleep(3)
+lcd.clear()
+lcd.write
+_
+string(" SAFETY DEVICE ")
+lcd.cursor
+_pos = (1, 0)
+lcd.write
+_
+string(" WITH GPS ")
+time.sleep(3)
+lcd.clear()
+lcd.write
+_
+string("TRACKING & ALERT")
+time.sleep(3)
+lcd.clear()
+lcd.write
+_
+string("GETTING GPS DATA")
+time.sleep(5)
+def send
+_
+sms(latitude, longitude):
+message = f"Help! I am in danger. Location:
+https://maps.google.com/?q={latitude},{longitude}&entry=gps\r"
+print("Setting SMS mode to text...
+")
+send
+at
+_
+_
+command('AT+CMGF=1')
+send
+at
+_
+_
+command(f'AT+CMGS="-------"') # Update as needed
+sim800L.write(message.encode())
+sim800L.write(bytes([0x1A]))
+time.sleep(5)
+print("SMS sent successfully.
+")
+def make
+_
+call():
+phone
+_
+number = "---------" # Update as needed
+send
+at
+_
+_
+command(f'ATD{phone
+_
+number};')
+time.sleep(10)
+print("Call initiated.
+")
+def alert
+_process():
+lcd.clear()
+lcd.write
+_
+string("WOMEN IN TROUBLE")
+lcd.cursor
+_pos = (1, 0)
+lcd.write
+_
+string(" HELP IS HERE!")
+time.sleep(5)
+latitude, longitude = get
+_gps
+_
+data()
+send
+_
+sms(latitude, longitude)
+make
+_
+call()
+subject = "Emergency Alert: Women in Trouble"
+body = f"Urgent help is needed! The woman is in distress. Here is the location:\n\nLatitude:
+{latitude}\nLongitude: {longitude}\n\nPlease contact the authorities immediately.
+"
+recipient
+_
+email = "------------"
+send
+_
+email(subject, body, recipient
+_
+email)
+def button
+_pressed():
+buzzer
+_
+thread = threading.Thread(target=activate
+_
+buzzer)
+buzzer
+_
+thread.start()
+alert
+_process()
+def activate
+_
+buzzer():
+buzzer.on()
+time.sleep(5)
+buzzer.off()
+if
+name
+__
+__
+== "
+main
+":
+__
+__
+display_
+initial
+_
+messages()
+try:
+while True:
+if button.is
+_pressed:
+button
+_pressed()
+time.sleep(0.1)
+except KeyboardInterrupt:
+lcd.clear()
+lcd.write
+_
+string(" Exiting...
+")
+sim800L.close()
